@@ -22,8 +22,9 @@ services:
 
     entrypoint: ["python", "app.py", "--server_port", "7860", "--server_name", "0.0.0.0",]
 
-    # GPU support for ARM64 (NVIDIA Jetson devices)
-    # If you're not using nvidia GPU, remove the entire `deploy' section
+    # GPU support for ARM64 (NVIDIA DGX/Jetson devices)
+    # Ensure NVIDIA Container Runtime is installed on host
+    # For NVIDIA DGX systems, GPU access is provided via NVIDIA Container Runtime
     deploy:
       resources:
         reservations:
@@ -31,4 +32,7 @@ services:
             - driver: nvidia
               count: all
               capabilities: [ gpu ]
+    
+    # Alternative: Use runtime instead of deploy (for older docker-compose versions)
+    # runtime: nvidia
 

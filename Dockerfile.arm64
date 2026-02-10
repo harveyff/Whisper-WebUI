@@ -22,12 +22,33 @@ RUN python3 -m venv venv && \
     . venv/bin/activate && \
     pip install --upgrade pip setuptools wheel
 
-# Install PyTorch - try CUDA first, fallback to CPU if not available
+# Install PyTorch with ARM64 GPU support
+# For NVIDIA DGX ARM systems, try multiple methods to get CUDA-enabled PyTorch
 RUN . venv/bin/activate && \
     echo "Attempting to install PyTorch CUDA version for ARM64..." && \
-    (pip install "torch>=2.8.0,<2.9.0" "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cu128 || \
-     (echo "CUDA version not available, trying CPU version..." && \
-      pip install "torch>=2.8.0,<2.9.0" "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cpu))
+    echo "Method 1: Try PyTorch official CUDA repository..." && \
+    (pip install "torch>=2.8.0,<2.9.0" "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cu128 2>&1 | tee /tmp/pytorch_install.log && \
+     python -c "import torch; cuda_ok = torch.cuda.is_available(); print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {cuda_ok}'); print(f'CUDA version: {torch.version.cuda if cuda_ok else \"N/A\"}'); exit(0 if cuda_ok else 1)" && \
+     echo "SUCCESS: PyTorch CUDA version installed from official repo!") || \
+    (echo "Method 1 failed, trying Method 2: Install without version constraint..." && \
+     pip uninstall -y torch torchaudio 2>/dev/null || true && \
+     pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128 2>&1 | tee /tmp/pytorch_install2.log && \
+     python -c "import torch; cuda_ok = torch.cuda.is_available(); print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {cuda_ok}'); print(f'CUDA version: {torch.version.cuda if cuda_ok else \"N/A\"}'); exit(0 if cuda_ok else 1)" && \
+     echo "SUCCESS: PyTorch CUDA version installed (without version constraint)!") || \
+    (echo "Method 2 failed, trying Method 3: Try CUDA 12.1..." && \
+     pip uninstall -y torch torchaudio 2>/dev/null || true && \
+     pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121 2>&1 | tee /tmp/pytorch_install3.log && \
+     python -c "import torch; cuda_ok = torch.cuda.is_available(); print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {cuda_ok}'); print(f'CUDA version: {torch.version.cuda if cuda_ok else \"N/A\"}'); exit(0 if cuda_ok else 1)" && \
+     echo "SUCCESS: PyTorch CUDA version installed (CUDA 12.1)!") || \
+    (echo "All CUDA methods failed. Installing CPU version as fallback..." && \
+     echo "NOTE: For NVIDIA DGX ARM systems, GPU support may require:" && \
+     echo "  1. Using NVIDIA PyTorch container as base image" && \
+     echo "  2. Building PyTorch from source with CUDA support" && \
+     echo "  3. Using pre-built PyTorch from NVIDIA's repository" && \
+     pip uninstall -y torch torchaudio 2>/dev/null || true && \
+     pip install "torch>=2.8.0,<2.9.0" "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cpu && \
+     python -c "import torch; print(f'PyTorch CPU version: {torch.__version__}'); print('WARNING: CPU version installed - GPU will not be available at build time!')" && \
+     echo "GPU support will be checked at runtime")
 
 # Install other Python packages
 RUN . venv/bin/activate && \
@@ -86,8 +107,13 @@ RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
 
 FROM --platform=linux/arm64 debian:bookworm-slim AS runtime
 
+# Install NVIDIA utilities for GPU access
+# Note: For NVIDIA DGX/ARM systems, nvidia-smi should be available via NVIDIA Container Runtime
+# But we install nvidia-utils as fallback
 RUN apt-get update && \
-    apt-get install -y curl ffmpeg python3 && \
+    apt-get install -y curl ffmpeg python3 gnupg2 wget && \
+    (wget -qO - https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/3bf863cc.pub | apt-key add - || true) && \
+    (apt-get install -y nvidia-utils || echo "nvidia-utils not available in repo, will use host drivers") && \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 WORKDIR /Whisper-WebUI
@@ -113,7 +139,19 @@ VOLUME [ "/Whisper-WebUI/models" ]
 VOLUME [ "/Whisper-WebUI/outputs" ]
 
 ENV PATH="/Whisper-WebUI/venv/bin:$PATH"
-ENV LD_LIBRARY_PATH=/Whisper-WebUI/venv/lib64/python3.11/site-packages/nvidia/cublas/lib:/Whisper-WebUI/venv/lib64/python3.11/site-packages/nvidia/cudnn/lib
+# Set LD_LIBRARY_PATH to include CUDA libraries from host and PyTorch
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu:/Whisper-WebUI/venv/lib64/python3.11/site-packages/nvidia/cublas/lib:/Whisper-WebUI/venv/lib64/python3.11/site-packages/nvidia/cudnn/lib:${LD_LIBRARY_PATH}
 
-ENTRYPOINT [ "python", "app.py" ]
+# Copy GPU check script
+COPY check_gpu.py /Whisper-WebUI/check_gpu.py
+
+# Create entrypoint script that checks GPU and attempts to use CUDA version if available
+RUN echo '#!/bin/sh\n\
+echo "Checking GPU availability..."\n\
+python /Whisper-WebUI/check_gpu.py\n\
+echo "Starting application..."\n\
+exec python /Whisper-WebUI/app.py "$@"' > /Whisper-WebUI/entrypoint.sh && \
+    chmod +x /Whisper-WebUI/entrypoint.sh
+
+ENTRYPOINT [ "/Whisper-WebUI/entrypoint.sh" ]
 

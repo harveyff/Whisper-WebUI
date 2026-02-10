@@ -1,0 +1,57 @@
+# Alternative Dockerfile using NVIDIA PyTorch base image for ARM64 GPU support
+# This uses NVIDIA's pre-built PyTorch container which has CUDA support for ARM64
+# Usage: docker build -f Dockerfile.arm64.nvidia -t whisper-webui:arm64-nvidia .
+
+FROM nvcr.io/nvidia/pytorch:24.12-py3 AS builder
+
+WORKDIR /Whisper-WebUI
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install dependencies (PyTorch is already installed in base image)
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install "setuptools<70" && \
+    pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2
+
+# Install git dependencies
+RUN cd /tmp && \
+    git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
+    pip install --no-build-isolation /tmp/jhj0517-whisper && \
+    rm -rf /tmp/jhj0517-whisper && \
+    cd /tmp && \
+    git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
+    pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
+    pip install openunmix && \
+    rm -rf /tmp/ultimatevocalremover_api && \
+    cd /tmp && \
+    git clone --depth 1 https://github.com/jhj0517/pyrubberband.git && \
+    cd pyrubberband && \
+    python setup.py develop && \
+    cd / && \
+    rm -rf /tmp/pyrubberband
+
+FROM nvcr.io/nvidia/pytorch:24.12-py3 AS runtime
+
+WORKDIR /Whisper-WebUI
+
+# Copy project files
+COPY . .
+COPY --from=builder /opt/conda /opt/conda
+
+RUN mkdir -p /Whisper-WebUI/configs_default && \
+    cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/
+
+VOLUME [ "/Whisper-WebUI/models" ]
+VOLUME [ "/Whisper-WebUI/outputs" ]
+
+ENV PATH="/opt/conda/bin:$PATH"
+COPY check_gpu.py /Whisper-WebUI/check_gpu.py
+
+RUN echo '#!/bin/sh\n\
+python /Whisper-WebUI/check_gpu.py\n\
+exec python /Whisper-WebUI/app.py "$@"' > /Whisper-WebUI/entrypoint.sh && \
+    chmod +x /Whisper-WebUI/entrypoint.sh
+
+ENTRYPOINT [ "/Whisper-WebUI/entrypoint.sh" ]
+
