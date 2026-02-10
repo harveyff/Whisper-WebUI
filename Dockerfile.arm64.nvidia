@@ -2,54 +2,89 @@
 # This uses NVIDIA's pre-built PyTorch container which has CUDA support for ARM64
 # Usage: docker build -f Dockerfile.arm64.nvidia -t whisper-webui:arm64-nvidia .
 
-FROM nvcr.io/nvidia/pytorch:24.12-py3 AS builder
+FROM nvcr.io/nvidia/pytorch:24.12-py3
 
 WORKDIR /Whisper-WebUI
 
-# Copy requirements
+# Copy requirements and project files
 COPY requirements.txt .
+COPY . .
 
-# Install dependencies (PyTorch is already installed in base image)
+# Install system dependencies if needed
+RUN apt-get update && \
+    apt-get install -y ffmpeg git && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies (PyTorch is already installed in base image)
 RUN pip install --upgrade pip setuptools wheel && \
     pip install "setuptools<70" && \
     pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2
 
-# Install git dependencies
-RUN cd /tmp && \
-    git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
-    pip install --no-build-isolation /tmp/jhj0517-whisper && \
-    rm -rf /tmp/jhj0517-whisper && \
-    cd /tmp && \
-    git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
-    pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
-    pip install openunmix && \
-    rm -rf /tmp/ultimatevocalremover_api && \
-    cd /tmp && \
-    git clone --depth 1 https://github.com/jhj0517/pyrubberband.git && \
-    cd pyrubberband && \
-    python setup.py develop && \
-    cd / && \
-    rm -rf /tmp/pyrubberband
+# Install git dependencies - try local first, fallback to remote
+RUN pip install "setuptools<70" && \
+    python -c "import pkg_resources; print('pkg_resources available')" && \
+    if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
+        echo "Using local jhj0517-whisper"; \
+        pip install --no-build-isolation ./jhj0517-whisper && \
+        python -c "import whisper; print('whisper module installed successfully')"; \
+    else \
+        echo "Installing jhj0517-whisper from GitHub"; \
+        cd /tmp && \
+        git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
+        pip install --no-build-isolation /tmp/jhj0517-whisper && \
+        python -c "import whisper; print('whisper module installed successfully')" && \
+        cd /Whisper-WebUI && \
+        rm -rf /tmp/jhj0517-whisper; \
+    fi
 
-FROM nvcr.io/nvidia/pytorch:24.12-py3 AS runtime
+RUN if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
+        echo "Using local ultimatevocalremover_api"; \
+        pip install --no-build-isolation --no-deps ./ultimatevocalremover_api; \
+    else \
+        echo "Installing ultimatevocalremover_api from GitHub"; \
+        cd /tmp && \
+        git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
+        pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
+        cd /Whisper-WebUI && \
+        rm -rf /tmp/ultimatevocalremover_api; \
+    fi
 
-WORKDIR /Whisper-WebUI
+# Install missing dependencies for uvr module
+RUN pip install openunmix && \
+    python -c "import uvr; print('uvr module installed successfully')" || echo "Warning: uvr module check failed"
 
-# Copy project files
-COPY . .
-COPY --from=builder /opt/conda /opt/conda
+RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
+        echo "Using local pyrubberband"; \
+        cd pyrubberband && \
+        python setup.py develop && \
+        cd ..; \
+    else \
+        echo "Installing pyrubberband from GitHub"; \
+        cd /tmp && \
+        git clone --depth 1 https://github.com/jhj0517/pyrubberband.git && \
+        cd pyrubberband && \
+        python setup.py develop && \
+        cd /Whisper-WebUI && \
+        rm -rf /tmp/pyrubberband; \
+    fi
+
+# Verify modules are available
+RUN python -c "import whisper; print('whisper module verified')" && \
+    (python -c "import uvr; print('uvr module verified')" || echo "Warning: uvr module not found")
 
 RUN mkdir -p /Whisper-WebUI/configs_default && \
-    cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/
+    cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/ 2>/dev/null || true
 
 VOLUME [ "/Whisper-WebUI/models" ]
 VOLUME [ "/Whisper-WebUI/outputs" ]
 
-ENV PATH="/opt/conda/bin:$PATH"
 COPY check_gpu.py /Whisper-WebUI/check_gpu.py
 
+# Create entrypoint script that checks GPU before starting
 RUN echo '#!/bin/sh\n\
+echo "Checking GPU availability..."\n\
 python /Whisper-WebUI/check_gpu.py\n\
+echo "Starting application..."\n\
 exec python /Whisper-WebUI/app.py "$@"' > /Whisper-WebUI/entrypoint.sh && \
     chmod +x /Whisper-WebUI/entrypoint.sh
 
