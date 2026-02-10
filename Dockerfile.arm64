@@ -35,8 +35,8 @@ RUN . venv/bin/activate && \
 
 # Install git dependencies - try local first, fallback to remote
 # Note: Using relative paths since WORKDIR is already /Whisper-WebUI
-# Ensure setuptools is available and use direct python setup.py develop
-RUN /Whisper-WebUI/venv/bin/pip install --force-reinstall setuptools && \
+# Install older setuptools version that includes pkg_resources, or use pip install with --no-build-isolation
+RUN /Whisper-WebUI/venv/bin/pip install "setuptools<70" && \
     /Whisper-WebUI/venv/bin/python -c "import pkg_resources; print('pkg_resources available')" && \
     if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
         echo "Using local jhj0517-whisper"; \
