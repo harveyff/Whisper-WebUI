@@ -54,17 +54,19 @@ RUN /Whisper-WebUI/venv/bin/pip install "setuptools<70" && \
 
 RUN if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps ./ultimatevocalremover_api && \
-        /Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module installed successfully')"; \
+        /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps ./ultimatevocalremover_api; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
         /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
-        /Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module installed successfully')" && \
         cd /Whisper-WebUI && \
         rm -rf /tmp/ultimatevocalremover_api; \
     fi
+
+# Install missing dependencies for uvr module
+RUN /Whisper-WebUI/venv/bin/pip install openunmix && \
+    /Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module installed successfully')"
 
 RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
         echo "Using local pyrubberband"; \
@@ -96,15 +98,14 @@ COPY . .
 COPY --from=builder /Whisper-WebUI/venv /Whisper-WebUI/venv
 # Verify modules are available in runtime
 RUN /Whisper-WebUI/venv/bin/python -c "import whisper; print('whisper module verified')" && \
-    /Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module verified')" || \
-    (echo "Warning: Some modules not found, attempting to reinstall..." && \
-     cd /tmp && \
-     git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
-     /Whisper-WebUI/venv/bin/pip install --no-build-isolation /tmp/jhj0517-whisper && \
-     git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
-     /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
-     rm -rf /tmp/jhj0517-whisper /tmp/ultimatevocalremover_api && \
-     /Whisper-WebUI/venv/bin/python -c "import whisper; import uvr; print('Modules reinstalled successfully')")
+    (/Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module verified')" || \
+     (echo "Warning: uvr module not found, attempting to reinstall..." && \
+      cd /tmp && \
+      git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
+      /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps /tmp/ultimatevocalremover_api && \
+      /Whisper-WebUI/venv/bin/pip install openunmix && \
+      rm -rf /tmp/ultimatevocalremover_api && \
+      /Whisper-WebUI/venv/bin/python -c "import uvr; print('uvr module reinstalled successfully')"))
 RUN mkdir -p /Whisper-WebUI/configs_default && \
     cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/
 
