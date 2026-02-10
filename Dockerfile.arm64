@@ -35,37 +35,51 @@ RUN . venv/bin/activate && \
 
 # Install git dependencies - try local first, fallback to remote
 # Note: Using relative paths since WORKDIR is already /Whisper-WebUI
-# Use venv/bin/pip with --no-build-isolation to avoid build isolation issues
-RUN if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
+# Ensure setuptools is available and use direct python setup.py develop
+RUN /Whisper-WebUI/venv/bin/pip install --force-reinstall setuptools && \
+    /Whisper-WebUI/venv/bin/python -c "import pkg_resources; print('pkg_resources available')" && \
+    if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
         echo "Using local jhj0517-whisper"; \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e ./jhj0517-whisper; \
+        cd jhj0517-whisper && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd ..; \
     else \
         echo "Installing jhj0517-whisper from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e /tmp/jhj0517-whisper && \
+        cd jhj0517-whisper && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd /Whisper-WebUI && \
         rm -rf /tmp/jhj0517-whisper; \
     fi
 
 RUN if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e ./ultimatevocalremover_api; \
+        cd ultimatevocalremover_api && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd ..; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e /tmp/ultimatevocalremover_api && \
+        cd ultimatevocalremover_api && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd /Whisper-WebUI && \
         rm -rf /tmp/ultimatevocalremover_api; \
     fi
 
 RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
         echo "Using local pyrubberband"; \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e ./pyrubberband; \
+        cd pyrubberband && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd ..; \
     else \
         echo "Installing pyrubberband from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/pyrubberband.git && \
-        /Whisper-WebUI/venv/bin/pip install --no-build-isolation -e /tmp/pyrubberband && \
+        cd pyrubberband && \
+        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        cd /Whisper-WebUI && \
         rm -rf /tmp/pyrubberband; \
     fi
 
