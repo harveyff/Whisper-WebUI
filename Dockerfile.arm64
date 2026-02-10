@@ -35,45 +35,48 @@ RUN . venv/bin/activate && \
 
 # Install git dependencies - try local first, fallback to remote
 # Note: Using relative paths since WORKDIR is already /Whisper-WebUI
-# Clone and install manually to avoid build isolation issues
+# Use --no-use-pep517 to avoid PEP 517 build system which creates isolated environments
 RUN . venv/bin/activate && \
+    export PIP_NO_BUILD_ISOLATION=1 && \
     if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
         echo "Using local jhj0517-whisper"; \
-        pip install --no-build-isolation -e ./jhj0517-whisper; \
+        pip install --no-build-isolation --no-use-pep517 -e ./jhj0517-whisper; \
     else \
         echo "Installing jhj0517-whisper from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/jhj0517-whisper.git && \
         cd jhj0517-whisper && \
-        pip install --no-build-isolation -e . && \
+        pip install --no-build-isolation --no-use-pep517 -e . && \
         cd /Whisper-WebUI && \
         rm -rf /tmp/jhj0517-whisper; \
     fi
 
 RUN . venv/bin/activate && \
+    export PIP_NO_BUILD_ISOLATION=1 && \
     if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        pip install --no-build-isolation -e ./ultimatevocalremover_api; \
+        pip install --no-build-isolation --no-use-pep517 -e ./ultimatevocalremover_api; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
         cd ultimatevocalremover_api && \
-        pip install --no-build-isolation -e . && \
+        pip install --no-build-isolation --no-use-pep517 -e . && \
         cd /Whisper-WebUI && \
         rm -rf /tmp/ultimatevocalremover_api; \
     fi
 
 RUN . venv/bin/activate && \
+    export PIP_NO_BUILD_ISOLATION=1 && \
     if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
         echo "Using local pyrubberband"; \
-        pip install --no-build-isolation -e ./pyrubberband; \
+        pip install --no-build-isolation --no-use-pep517 -e ./pyrubberband; \
     else \
         echo "Installing pyrubberband from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/pyrubberband.git && \
         cd pyrubberband && \
-        pip install --no-build-isolation -e . && \
+        pip install --no-build-isolation --no-use-pep517 -e . && \
         cd /Whisper-WebUI && \
         rm -rf /tmp/pyrubberband; \
     fi
