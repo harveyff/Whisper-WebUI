@@ -55,15 +55,12 @@ RUN /Whisper-WebUI/venv/bin/pip install "setuptools<70" && \
 
 RUN if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        cd ultimatevocalremover_api && \
-        /Whisper-WebUI/venv/bin/python setup.py develop && \
-        cd ..; \
+        /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps -e ./ultimatevocalremover_api; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         cd /tmp && \
         git clone --depth 1 https://github.com/jhj0517/ultimatevocalremover_api.git && \
-        cd ultimatevocalremover_api && \
-        /Whisper-WebUI/venv/bin/python setup.py develop && \
+        /Whisper-WebUI/venv/bin/pip install --no-build-isolation --no-deps -e /tmp/ultimatevocalremover_api && \
         cd /Whisper-WebUI && \
         rm -rf /tmp/ultimatevocalremover_api; \
     fi
