@@ -20,30 +20,46 @@ COPY . .
 # Try to use local git dependencies if available in project root, otherwise use remote
 RUN python3 -m venv venv && \
     . venv/bin/activate && \
-    pip install --upgrade pip setuptools wheel && \
-    pip install torch>=2.8.0,<2.9.0 torchaudio>=2.8.0,<2.9.0 --index-url https://download.pytorch.org/whl/cu128 && \
-    pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2 && \
-    (if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
+    pip install --upgrade pip setuptools wheel
+
+# Install PyTorch - try CUDA first, fallback to CPU if not available
+RUN . venv/bin/activate && \
+    echo "Attempting to install PyTorch CUDA version for ARM64..." && \
+    (pip install torch>=2.8.0,<2.9.0 torchaudio>=2.8.0,<2.9.0 --index-url https://download.pytorch.org/whl/cu128 2>&1 || \
+     (echo "CUDA version not available, trying CPU version..." && \
+      pip install torch>=2.8.0,<2.9.0 torchaudio>=2.8.0,<2.9.0 --index-url https://download.pytorch.org/whl/cpu))
+
+# Install other Python packages
+RUN . venv/bin/activate && \
+    pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2
+
+# Install git dependencies - try local first, fallback to remote
+RUN . venv/bin/activate && \
+    if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
         echo "Using local jhj0517-whisper"; \
-        pip install --no-build-isolation -e ./jhj0517-whisper; \
+        pip install --no-build-isolation -e ./jhj0517-whisper || pip install --no-build-isolation git+https://github.com/jhj0517/jhj0517-whisper.git; \
     else \
         echo "Installing jhj0517-whisper from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/jhj0517-whisper.git; \
-    fi) && \
-    (if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
+    fi
+
+RUN . venv/bin/activate && \
+    if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        pip install --no-build-isolation -e ./ultimatevocalremover_api; \
+        pip install --no-build-isolation -e ./ultimatevocalremover_api || pip install --no-build-isolation git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
-    fi) && \
-    (if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
+    fi
+
+RUN . venv/bin/activate && \
+    if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
         echo "Using local pyrubberband"; \
-        pip install --no-build-isolation -e ./pyrubberband; \
+        pip install --no-build-isolation -e ./pyrubberband || pip install --no-build-isolation git+https://github.com/jhj0517/pyrubberband.git; \
     else \
         echo "Installing pyrubberband from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/pyrubberband.git; \
-    fi)
+    fi
 
 
 FROM --platform=linux/arm64 debian:bookworm-slim AS runtime
