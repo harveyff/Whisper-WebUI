@@ -35,27 +35,27 @@ RUN . venv/bin/activate && \
 
 # Install git dependencies - try local first, fallback to remote
 RUN . venv/bin/activate && \
-    if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
+    if [ -d "/Whisper-WebUI/jhj0517-whisper" ] && [ -f "/Whisper-WebUI/jhj0517-whisper/setup.py" ]; then \
         echo "Using local jhj0517-whisper"; \
-        pip install --no-build-isolation -e ./jhj0517-whisper || pip install --no-build-isolation git+https://github.com/jhj0517/jhj0517-whisper.git; \
+        pip install --no-build-isolation -e /Whisper-WebUI/jhj0517-whisper || pip install --no-build-isolation git+https://github.com/jhj0517/jhj0517-whisper.git; \
     else \
         echo "Installing jhj0517-whisper from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/jhj0517-whisper.git; \
     fi
 
 RUN . venv/bin/activate && \
-    if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
+    if [ -d "/Whisper-WebUI/ultimatevocalremover_api" ] && [ -f "/Whisper-WebUI/ultimatevocalremover_api/setup.py" ]; then \
         echo "Using local ultimatevocalremover_api"; \
-        pip install --no-build-isolation -e ./ultimatevocalremover_api || pip install --no-build-isolation git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
+        pip install --no-build-isolation -e /Whisper-WebUI/ultimatevocalremover_api || pip install --no-build-isolation git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
     else \
         echo "Installing ultimatevocalremover_api from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
     fi
 
 RUN . venv/bin/activate && \
-    if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
+    if [ -d "/Whisper-WebUI/pyrubberband" ] && [ -f "/Whisper-WebUI/pyrubberband/setup.py" ]; then \
         echo "Using local pyrubberband"; \
-        pip install --no-build-isolation -e ./pyrubberband || pip install --no-build-isolation git+https://github.com/jhj0517/pyrubberband.git; \
+        pip install --no-build-isolation -e /Whisper-WebUI/pyrubberband || pip install --no-build-isolation git+https://github.com/jhj0517/pyrubberband.git; \
     else \
         echo "Installing pyrubberband from GitHub"; \
         pip install --no-build-isolation git+https://github.com/jhj0517/pyrubberband.git; \
