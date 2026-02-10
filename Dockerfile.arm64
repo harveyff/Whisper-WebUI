@@ -7,15 +7,42 @@ RUN apt-get update && \
 
 WORKDIR /Whisper-WebUI
 
+# Copy requirements first for better layer caching
 COPY requirements.txt .
+
+# Copy project files (including potential local git dependencies in subdirectories)
+# This allows using local git repos if they exist, otherwise will use remote
+COPY . .
 
 # Install PyTorch for ARM64 with GPU support (for NVIDIA Jetson)
 # For NVIDIA Jetson devices, use PyTorch from NVIDIA's repository
 # For other ARM devices, this will fall back to CPU version
+# Try to use local git dependencies if available in project root, otherwise use remote
 RUN python3 -m venv venv && \
     . venv/bin/activate && \
-    pip install --upgrade pip && \
-    pip install -U -r requirements.txt
+    pip install --upgrade pip setuptools wheel && \
+    (if [ -d "jhj0517-whisper" ] && [ -f "jhj0517-whisper/setup.py" ]; then \
+        echo "Using local jhj0517-whisper"; \
+        pip install -e ./jhj0517-whisper; \
+    else \
+        echo "Installing jhj0517-whisper from GitHub"; \
+        pip install git+https://github.com/jhj0517/jhj0517-whisper.git; \
+    fi) && \
+    (if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup.py" ]; then \
+        echo "Using local ultimatevocalremover_api"; \
+        pip install -e ./ultimatevocalremover_api; \
+    else \
+        echo "Installing ultimatevocalremover_api from GitHub"; \
+        pip install git+https://github.com/jhj0517/ultimatevocalremover_api.git; \
+    fi) && \
+    (if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
+        echo "Using local pyrubberband"; \
+        pip install -e ./pyrubberband; \
+    else \
+        echo "Installing pyrubberband from GitHub"; \
+        pip install git+https://github.com/jhj0517/pyrubberband.git; \
+    fi) && \
+    pip install -U $(grep -vE "^--extra-index-url|^#|^$|git\+|jhj0517-whisper|ultimatevocalremover|pyrubberband" requirements.txt)
 
 
 FROM --platform=linux/arm64 debian:bookworm-slim AS runtime
@@ -26,7 +53,9 @@ RUN apt-get update && \
 
 WORKDIR /Whisper-WebUI
 
+# Copy project files first
 COPY . .
+# Then copy venv from builder (this will preserve the venv)
 COPY --from=builder /Whisper-WebUI/venv /Whisper-WebUI/venv
 RUN mkdir -p /Whisper-WebUI/configs_default && \
     cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/
