@@ -26,12 +26,12 @@ COPY . .
 # Ensure we're using the virtual environment explicitly
 # Use version constraints from requirements.txt to ensure compatibility
 # Note: ARM64 torchaudio may have library loading issues, so we install it separately and handle errors
+# Important: Install torch, torchvision, and torchaudio together from the same index to ensure compatibility
 RUN /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
     /opt/venv/bin/pip install "setuptools<70" && \
     echo "Attempting to install PyTorch for ARM64..." && \
-    (/opt/venv/bin/pip install "torch>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cu128 2>&1 | tee /tmp/pytorch_install.log && \
-     /opt/venv/bin/pip install torchvision --index-url https://download.pytorch.org/whl/cu128 && \
-     /opt/venv/bin/python -c "import torch; import torchvision; print(f'PyTorch: {torch.__version__}'); print(f'TorchVision: {torchvision.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')" && \
+    (/opt/venv/bin/pip install "torch>=2.8.0,<2.9.0" "torchvision>=0.21.0,<0.22.0" --index-url https://download.pytorch.org/whl/cu128 2>&1 | tee /tmp/pytorch_install.log && \
+     /opt/venv/bin/python -c "import torch; import torchvision; print(f'PyTorch: {torch.__version__}'); print(f'TorchVision: {torchvision.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); import torchvision.ops; print('torchvision.ops available')" && \
      echo "Installing torchaudio (may fail on ARM64, will try CPU version if needed)..." && \
      (/opt/venv/bin/pip install "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cu128 2>&1 | tee /tmp/torchaudio_install.log && \
       /opt/venv/bin/python -c "import torchaudio; print(f'TorchAudio: {torchaudio.__version__}')" || \
@@ -42,14 +42,13 @@ RUN /opt/venv/bin/pip install --upgrade pip setuptools wheel && \
        echo "Warning: torchaudio installation failed, but continuing...")) && \
      echo "SUCCESS: PyTorch CUDA installed") || \
     (echo "CUDA version failed, trying CPU version..." && \
-     /opt/venv/bin/pip install "torch>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cpu && \
-     /opt/venv/bin/pip install torchvision --index-url https://download.pytorch.org/whl/cpu && \
-     /opt/venv/bin/python -c "import torch; import torchvision; print(f'PyTorch CPU: {torch.__version__}'); print(f'TorchVision: {torchvision.__version__}')" && \
+     /opt/venv/bin/pip install "torch>=2.8.0,<2.9.0" "torchvision>=0.21.0,<0.22.0" --index-url https://download.pytorch.org/whl/cpu && \
+     /opt/venv/bin/python -c "import torch; import torchvision; print(f'PyTorch CPU: {torch.__version__}'); print(f'TorchVision: {torchvision.__version__}'); import torchvision.ops; print('torchvision.ops available')" && \
      (/opt/venv/bin/pip install "torchaudio>=2.8.0,<2.9.0" --index-url https://download.pytorch.org/whl/cpu && \
       /opt/venv/bin/python -c "import torchaudio; print(f'TorchAudio CPU: {torchaudio.__version__}')" || \
       echo "Warning: torchaudio installation failed, but continuing...") && \
      echo "WARNING: CPU version - GPU may not work") && \
-    /opt/venv/bin/pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2
+    /opt/venv/bin/pip install matplotlib faster-whisper==1.1.1 transformers==4.47.1 gradio==5.29.0 gradio-i18n==0.3.1 pytubefix ruamel.yaml==0.18.6 pyannote.audio==3.3.2 librosa
 
 # Install git dependencies - try local first, fallback to remote
 RUN /opt/venv/bin/pip install "setuptools<70" && \
@@ -81,8 +80,10 @@ RUN if [ -d "ultimatevocalremover_api" ] && [ -f "ultimatevocalremover_api/setup
     fi
 
 # Install missing dependencies for uvr module (must be installed after ultimatevocalremover_api)
-# audioread is required by uvr module's spec_utils
+# audioread and librosa are required by uvr module's spec_utils
+# librosa is already installed above, but ensure all dependencies are present
 RUN /opt/venv/bin/pip install openunmix lameenc audioread && \
+    /opt/venv/bin/python -c "import librosa; print('librosa module verified')" && \
     /opt/venv/bin/python -c "import uvr; print('uvr module installed successfully')" || echo "Warning: uvr module check failed"
 
 RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
@@ -104,10 +105,11 @@ RUN if [ -d "pyrubberband" ] && [ -f "pyrubberband/setup.py" ]; then \
 # Note: torchaudio may fail to load on ARM64, so we handle it gracefully
 RUN /opt/venv/bin/python -c "import whisper; print('whisper module verified')" && \
     (/opt/venv/bin/python -c "import uvr; print('uvr module verified')" || echo "Warning: uvr module not found") && \
-    (/opt/venv/bin/python -c "import torch; import torchvision; print(f'PyTorch: {torch.__version__}, TorchVision: {torchvision.__version__}')" || echo "Warning: PyTorch/TorchVision verification failed") && \
+    (/opt/venv/bin/python -c "import torch; import torchvision; import torchvision.ops; print(f'PyTorch: {torch.__version__}, TorchVision: {torchvision.__version__}'); print('torchvision.ops verified')" || echo "Warning: PyTorch/TorchVision verification failed") && \
     (/opt/venv/bin/python -c "import torchaudio; print(f'TorchAudio: {torchaudio.__version__}'); print(f'TorchAudio AudioMetaData available: {hasattr(torchaudio, \"AudioMetaData\")}')" || echo "Warning: torchaudio verification failed (may be OK on ARM64)") && \
     /opt/venv/bin/python -c "import lameenc; print('lameenc module verified')" && \
-    /opt/venv/bin/python -c "import audioread; print('audioread module verified')"
+    /opt/venv/bin/python -c "import audioread; print('audioread module verified')" && \
+    /opt/venv/bin/python -c "import librosa; print('librosa module verified')"
 
 RUN mkdir -p /Whisper-WebUI/configs_default && \
     cp -a /Whisper-WebUI/configs/. /Whisper-WebUI/configs_default/ 2>/dev/null || true
